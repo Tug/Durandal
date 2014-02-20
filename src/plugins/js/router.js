@@ -189,7 +189,7 @@ define(['durandal/system', 'durandal/app', 'durandal/activator', 'durandal/event
 
         function setCurrentInstructionRouteIsActive(flag) {
             if (currentInstruction && currentInstruction.config.isActive) {
-                currentInstruction.config.isActive(flag)
+                currentInstruction.config.isActive(flag);
             }
         }
 
@@ -255,12 +255,16 @@ define(['durandal/system', 'durandal/app', 'durandal/activator', 'durandal/event
                     completeNavigation(instance, instruction);
 
                     if (hasChildRouter(instance)) {
-                        var fullFragment = instruction.fragment;
-                        if (instruction.queryString) {
-                            fullFragment += "?" + instruction.queryString;
+                        instance.router.trigger('router:route:before-child-routes', instance, instruction, router);
+                        var parentInstruction = instance.router.parent.activeInstruction();
+                        var childFragment = parentInstruction.params[1] || '';
+                        if(childFragment[0] == '/') {
+                            childFragment = childFragment.substr(1);
                         }
-
-                        instance.router.loadUrl(fullFragment);
+                        if (instruction.queryString) {
+                            childFragment += "?" + instruction.queryString;
+                        }
+                        instance.router.loadUrl(childFragment);
                     }
 
                     if (previousActivation == instance) {
@@ -269,7 +273,7 @@ define(['durandal/system', 'durandal/app', 'durandal/activator', 'durandal/event
                     }
                 } else if(activator.settings.lifecycleData && activator.settings.lifecycleData.redirect){
                     redirect(activator.settings.lifecycleData.redirect);
-                }else{
+                } else{
                     cancelNavigation(instance, instruction);
                 }
 
@@ -498,21 +502,6 @@ define(['durandal/system', 'durandal/app', 'durandal/activator', 'durandal/event
                 queryString = fragment.substr(queryIndex + 1);
             }
 
-            if(router.relativeToParentRouter){
-                var instruction = this.parent.activeInstruction();
-                coreFragment = instruction.params.join('/');
-
-                if(coreFragment && coreFragment.charAt(0) == '/'){
-                    coreFragment = coreFragment.substr(1);
-                }
-
-                if(!coreFragment){
-                    coreFragment = '';
-                }
-
-                coreFragment = coreFragment.replace('//', '/').replace('//', '/');
-            }
-
             coreFragment = coreFragment.replace(trailingSlash, '');
 
             for (var i = 0; i < handlers.length; i++) {
@@ -603,7 +592,7 @@ define(['durandal/system', 'durandal/app', 'durandal/activator', 'durandal/event
         router.convertRouteToHash = function(route) {
             if(router.relativeToParentRouter){
                 var instruction = router.parent.activeInstruction(),
-                    hash = instruction.config.hash + '/' + route;
+                    hash = route ? instruction.config.hash + '/' + route : instruction.config.hash;
 
                 if(history._hasPushState){
                     hash = '/' + hash;
@@ -618,6 +607,16 @@ define(['durandal/system', 'durandal/app', 'durandal/activator', 'durandal/event
             }
 
             return "#" + route;
+        };
+
+        router.activeRouteToHash = function() {
+            var instruction = router.activeInstruction();
+            var params = instruction.params.slice(0);
+            return instruction && instruction.config.hash
+                .replace(optionalParam, '$1')
+                .replace(namedParam, function (match) {
+                    return params.length > 0 ? params.shift() : match;
+                });
         };
 
         /**
@@ -815,6 +814,25 @@ define(['durandal/system', 'durandal/app', 'durandal/activator', 'durandal/event
                     }
                 }
             });
+
+            if (settings.dynamicHash) {
+                router.on('router:route:after-config').then(function (config) {
+                    config.dynamicHash = config.dynamicHash || ko.observable(config.hash);
+                });
+
+                router.on('router:route:before-child-routes').then(function(instance, instruction, parentRouter) {
+                    var childRouter = instance.router;
+                    for (var i = 0; i < childRouter.routes.length; i++) {
+                        var route = childRouter.routes[i];
+                        var params = instruction.params.slice(0,1);
+                        route.hash = childRouter.convertRouteToHash(route.route)
+                            .replace(namedParam, function (match) {
+                                return params.length > 0?params.shift() : match;
+                            });
+                        route.dynamicHash(route.hash);
+                    }
+                });
+            }
 
             return router;
         };
