@@ -825,11 +825,11 @@ define(['durandal/system', 'durandal/app', 'durandal/activator', 'durandal/event
                     for (var i = 0; i < childRouter.routes.length; i++) {
                         var route = childRouter.routes[i];
                         var params = instruction.params.slice(0,1);
-                        route.hash = childRouter.convertRouteToHash(route.route)
+                        var hash = childRouter.convertRouteToHash(route.route)
                             .replace(namedParam, function (match) {
                                 return params.length > 0?params.shift() : match;
                             });
-                        route.dynamicHash(route.hash);
+                        route.dynamicHash(hash);
                     }
                 });
             }
